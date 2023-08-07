@@ -25,7 +25,8 @@ func main() {
 	//URLを受け取る
 	r.POST("/process-url", func(c *gin.Context) {
 		var inputData struct {
-			URL string `form:"url" binding:"required"`
+			URL         string `form:"url" binding:"required"`
+			WhoisResult string `form:"whois_result" binding:"required"`
 		}
 
 		if err := c.ShouldBind(&inputData); err != nil {
@@ -34,7 +35,7 @@ func main() {
 		}
 
 		// inputData.URL にフォームから送信されたURLが格納されているので、ここで適切な処理を行う
-		// 受け取ったURLをAIに送信して結果を取得
+		// 受け取ったURLとwhois詳細をAIに送信して結果を取得
 		aiResponse, err := sendURLtoAI(inputData.URL)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error sending URL to AI"})
@@ -51,8 +52,11 @@ func main() {
 
 // AIにURLを送信して結果を取得する関数
 // できててほしい
+// todo: warningとしてerror strings should not be capitalized が出ているので修正する
 func sendURLtoAI(url string) (int, error) {
-	data := map[string]string{"url": url}
+	data := map[string]string{
+		"url": url,
+	}
 
 	jsonData, err := json.Marshal(data)
 	if err != nil {
@@ -91,3 +95,5 @@ func sendURLtoAI(url string) (int, error) {
 
 	return int(result), nil
 }
+
+//todo:送信されたURLとその正誤判定をDBに保存するものを作る
