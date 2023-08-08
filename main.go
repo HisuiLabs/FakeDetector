@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	whois "github.com/undiabler/golang-whois"
 )
 
 type URLData struct {
@@ -25,8 +26,7 @@ func main() {
 	//URLを受け取る
 	r.POST("/process-url", func(c *gin.Context) {
 		var inputData struct {
-			URL         string `form:"url" binding:"required"`
-			WhoisResult string `form:"whois_result" binding:"required"`
+			URL string `form:"url" binding:"required"`
 		}
 
 		if err := c.ShouldBind(&inputData); err != nil {
@@ -34,9 +34,15 @@ func main() {
 			return
 		}
 
-		// inputData.URL にフォームから送信されたURLが格納されているので、ここで適切な処理を行う
+		//whoisの取得
+		whoisResult, err := whois.GetWhois(inputData.URL)
+		if err != nil {
+			fmt.Println("Error in whois lookup : %v ", err)
+			return
+		}
+
 		// 受け取ったURLとwhois詳細をAIに送信して結果を取得
-		aiResponse, err := sendURLtoAI(inputData.URL)
+		aiResponse, err := sendURLtoAI(inputData.URL, whoisResult)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error sending URL to AI"})
 			return
@@ -50,12 +56,10 @@ func main() {
 	r.Run(":8080")
 }
 
-// AIにURLを送信して結果を取得する関数
-// できててほしい
-// todo: warningとしてerror strings should not be capitalized が出ているので修正する
-func sendURLtoAI(url string) (int, error) {
+func sendURLtoAI(url, whoisResult string) (int, error) {
 	data := map[string]string{
-		"url": url,
+		"url":          url,
+		"whois_result": whoisResult,
 	}
 
 	jsonData, err := json.Marshal(data)
@@ -96,4 +100,4 @@ func sendURLtoAI(url string) (int, error) {
 	return int(result), nil
 }
 
-//todo:送信されたURLとその正誤判定をDBに保存するものを作る
+// URLとその審議判定をDBに保存する
