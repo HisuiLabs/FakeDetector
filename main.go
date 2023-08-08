@@ -1,10 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os/exec"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	whois "github.com/undiabler/golang-whois"
@@ -20,13 +21,11 @@ type URLData struct {
 }
 
 func main() {
-	// Ginのルーターを初期化
 	r := gin.Default()
 
-	//URLを受け取る
 	r.POST("/process-url", func(c *gin.Context) {
 		var inputData struct {
-			URL string `form:"url" binding:"required"`
+			URL string `form: "url" binding: "required"`
 		}
 
 		if err := c.ShouldBind(&inputData); err != nil {
@@ -37,67 +36,60 @@ func main() {
 		//whoisの取得
 		whoisResult, err := whois.GetWhois(inputData.URL)
 		if err != nil {
-			fmt.Println("Error in whois lookup : %v ", err)
+			fmt.Println(err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in whois lookup"})
 			return
 		}
 
-		// 受け取ったURLとwhois詳細をAIに送信して結果を取得
-		aiResponse, err := sendURLtoAI(inputData.URL, whoisResult)
+		// モデルに送信するデータを整形
+		modelInput := map[string]interface{}{
+			"url":          inputData.URL,
+			"whois_result": whoisResult,
+		}
+
+		// JSONに変換
+		modelInputJSON, err := json.Marshal(modelInput)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error sending URL to AI"})
+			fmt.Println(err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in model prediction"})
 			return
 		}
 
-		// AIからのレスポンス（0か1）をフロントに返す
-		c.JSON(http.StatusOK, aiResponse)
+		// Pythonスクリプトを呼び出して予測結果を取得
+		cmd := exec.Command("python3", "src/predict.py")
+		cmd.Stdin = strings.NewReader(string(modelInputJSON))
+
+		// 標準出力を取得
+		output, err := cmd.Output()
+		if err != nil {
+			fmt.Println(err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in model prediction"})
+			return
+		}
+
+		//Pythonスクリプトからの結果をパースしてフロントに返す
+		var modelOutput struct {
+			Label string `json:"label"`
+		}
+
+		if err := json.Unmarshal(output, &modelOutput); err != nil {
+			fmt.Println(err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in model prediction"})
+			return
+		}
+
+		//フロントに返すデータを整形
+		urlData := URLData{
+			URL:         inputData.URL,
+			WhoisResult: whoisResult,
+			Label:       modelOutput.Label,
+		}
+
+		c.JSON(http.StatusOK, urlData)
+
 	})
 
-	// サーバーを起動
 	r.Run(":8080")
 }
 
-func sendURLtoAI(url, whoisResult string) (int, error) {
-	data := map[string]string{
-		"url":          url,
-		"whois_result": whoisResult,
-	}
-
-	jsonData, err := json.Marshal(data)
-	if err != nil {
-		return 0, err
-	}
-
-	aiURL := "http://localhost:5000/predict"
-
-	req, err := http.NewRequest("POST", aiURL, bytes.NewBuffer(jsonData))
-	if err != nil {
-		return 0, err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	var responseData map[string]interface{}
-	err = json.NewDecoder(resp.Body).Decode(&responseData)
-	if err != nil {
-		return 0, err
-	}
-
-	// responseDataから審議判定を取得して整数値に変換する
-	// この例では、"result" フィールドが 0 または 1 として返されることを仮定しています
-	result, ok := responseData["result"].(float64)
-	if !ok {
-		return 0, fmt.Errorf("Invalid response format")
-	}
-
-	return int(result), nil
-}
-
-// URLとその審議判定をDBに保存する
+//できていてほしい
