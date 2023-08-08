@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -56,7 +57,13 @@ func main() {
 		}
 
 		// Pythonスクリプトを呼び出して予測結果を取得
-		cmd := exec.Command("python3", "src/predict.py")
+		cmd := exec.Command(".venv/bin/python3", "src/predict.py")
+		cmd.Stderr = os.Stderr
+		out, err := cmd.Output()
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(string(out))
 		cmd.Stdin = strings.NewReader(string(modelInputJSON))
 
 		// 標準出力を取得
