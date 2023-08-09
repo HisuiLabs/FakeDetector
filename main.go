@@ -18,15 +18,15 @@ type URLData struct {
 	Scheme      string `json:"scheme"`
 	TDL         string `json:"tld"`
 	WhoisResult string `json:"whois_result"`
-	Label       string `json:"label"`
+	Label       int    `json:"label"`
 }
 
 func main() {
 	r := gin.Default()
 
-	r.POST("/process-url", func(c *gin.Context) {
+	r.POST("/", func(c *gin.Context) {
 		var inputData struct {
-			URL string `form: "url" binding: "required"`
+			URL string `form:"url" binding:"required"`
 		}
 
 		if err := c.ShouldBind(&inputData); err != nil {
@@ -34,10 +34,12 @@ func main() {
 			return
 		}
 
-		//whoisの取得
-		whoisResult, err := whois.GetWhois(inputData.URL)
+		domain := inputData.URL
+
+		// whoisの取得
+		whoisResult, err := whois.GetWhois(domain)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println(err) // エラーメッセージを表示して問題を特定
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in whois lookup"})
 			return
 		}
@@ -52,40 +54,37 @@ func main() {
 		modelInputJSON, err := json.Marshal(modelInput)
 		if err != nil {
 			fmt.Println(err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in model prediction"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in model prediction1"})
 			return
 		}
 
 		// Pythonスクリプトを呼び出して予測結果を取得
-		cmd := exec.Command(".venv/bin/python3", "src/predict.py")
+		cmd := exec.Command("python3", "predict.py")
 		cmd.Stderr = os.Stderr
-		out, err := cmd.Output()
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(string(out))
 		cmd.Stdin = strings.NewReader(string(modelInputJSON))
 
-		// 標準出力を取得
+		// 実行
 		output, err := cmd.Output()
 		if err != nil {
-			fmt.Println(err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in model prediction"})
+			fmt.Println("Error executing Python script:", err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in model prediction2"})
 			return
 		}
 
-		//Pythonスクリプトからの結果をパースしてフロントに返す
+		trimmedOutput := strings.TrimSpace(string(output))
+
+		// Pythonスクリプトからの結果を数値として読み取る
 		var modelOutput struct {
-			Label string `json:"label"`
+			Label int `json:"label"`
 		}
 
-		if err := json.Unmarshal(output, &modelOutput); err != nil {
+		if err := json.Unmarshal([]byte(trimmedOutput), &modelOutput); err != nil {
 			fmt.Println(err)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in model prediction"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Error in model prediction3"})
 			return
 		}
 
-		//フロントに返すデータを整形
+		// フロントに返すデータを整形
 		urlData := URLData{
 			URL:         inputData.URL,
 			WhoisResult: whoisResult,
@@ -98,5 +97,3 @@ func main() {
 
 	r.Run(":8080")
 }
-
-//できていてほしい
