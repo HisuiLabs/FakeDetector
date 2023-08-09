@@ -74,6 +74,7 @@ func main() {
 		trimmedOutput := strings.TrimSpace(string(output))
 
 		// Pythonスクリプトからの結果を数値として読み取る
+		//ここのError in model prediction3が出る
 		var modelOutput struct {
 			Label int `json:"label"`
 		}
