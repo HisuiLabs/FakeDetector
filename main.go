@@ -18,7 +18,7 @@ type URLData struct {
 	Scheme      string `json:"scheme"`
 	TDL         string `json:"tld"`
 	WhoisResult string `json:"whois_result"`
-	Label       int    `json:"label"`
+	//Label       int    `json:"label"`
 }
 
 func main() {
@@ -74,10 +74,8 @@ func main() {
 		trimmedOutput := strings.TrimSpace(string(output))
 
 		// Pythonスクリプトからの結果を数値として読み取る
-		//ここのError in model prediction3が出る
-		var modelOutput struct {
-			Label int `json:"label"`
-		}
+		// Pythonスクリプトからの結果を数値として読み取る
+		var modelOutput int
 
 		if err := json.Unmarshal([]byte(trimmedOutput), &modelOutput); err != nil {
 			fmt.Println(err)
@@ -85,11 +83,13 @@ func main() {
 			return
 		}
 
+		//labelValue := modelOutput
+
 		// フロントに返すデータを整形
 		urlData := URLData{
 			URL:         inputData.URL,
 			WhoisResult: whoisResult,
-			Label:       modelOutput.Label,
+			//Label:       labelValue,
 		}
 
 		c.JSON(http.StatusOK, urlData)
